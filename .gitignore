@@ -1,0 +1,8 @@
+node_modules/
+.wwebjs_auth/
+data/
+media/
+.env
+.DS_Store
+npm-debug.log
+conversations/
