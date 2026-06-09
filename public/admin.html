@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+
+    <title>WhatsApp CRM Dashboard</title>
+
+    <style>
+
+        body{
+            font-family:Arial;
+            padding:20px;
+        }
+
+        h1{
+            margin-bottom:20px;
+        }
+
+        table{
+            border-collapse:collapse;
+            width:100%;
+        }
+
+        th,td{
+            border:1px solid #ccc;
+            padding:10px;
+            text-align:left;
+        }
+
+        th{
+            background:#f5f5f5;
+        }
+
+        .connected{
+            color:green;
+            font-weight:bold;
+        }
+
+        .disconnected{
+            color:red;
+            font-weight:bold;
+        }
+
+        #summary{
+
+            display:flex;
+
+            gap:20px;
+
+            margin-bottom:25px;
+
+        }
+
+        .card{
+
+            border:1px solid #ddd;
+
+            padding:15px;
+
+            min-width:180px;
+
+            border-radius:8px;
+
+        }
+
+        .card h3{
+
+            margin:0 0 10px 0;
+
+            font-size:14px;
+
+        }
+
+        .card span{
+
+            font-size:28px;
+
+            font-weight:bold;
+
+        }
+
+        #addAgent{
+
+            margin-bottom:30px;
+
+            padding:15px;
+
+            border:1px solid #ddd;
+
+            border-radius:8px;
+
+        }
+
+        #addAgent input{
+
+            padding:8px;
+
+            margin-right:10px;
+
+            margin-bottom:10px;
+
+        }
+
+        button{
+
+            padding:8px 12px;
+            cursor:pointer;
+
+        }
+
+    </style>
+
+</head>
+
+<body>
+
+<h1>WhatsApp CRM Dashboard</h1>
+
+<div id="addAgent">
+
+    <h2>Add Agent</h2>
+
+    <input
+        id="agentId"
+        placeholder="Agent ID"
+    >
+
+    <input
+        id="agentName"
+        placeholder="Agent Name"
+    >
+
+    <input
+        id="email"
+        placeholder="Email"
+    >
+
+    <button
+        onclick="addAgent()"
+    >
+        Create Agent
+    </button>
+
+</div>
+
+<div id="summary">
+
+    <div class="card">
+        <h3>Total Agents</h3>
+        <span id="totalAgents">0</span>
+    </div>
+
+    <div class="card">
+        <h3>Active Agents</h3>
+        <span id="activeAgents">0</span>
+    </div>
+
+    <div class="card">
+        <h3>Connected Sessions</h3>
+        <span id="connectedSessions">0</span>
+    </div>
+
+    <div class="card">
+        <h3>Disconnected Sessions</h3>
+        <span id="disconnectedSessions">0</span>
+    </div>
+
+</div>
+
+<table id="agentTable">
+
+    <thead>
+
+        <tr>
+
+            <th>Agent</th>
+            <th>Email</th>
+            <th>Active</th>
+            <th>Session</th>
+            <th>Last Connected</th>
+            <th>Actions</th>
+
+        </tr>
+
+    </thead>
+
+    <tbody>
+
+    </tbody>
+
+</table>
+
+<script>
+
+async function loadDashboard(){
+
+    const agentsResponse =
+    await fetch("/agents");
+
+    const sessionsResponse =
+    await fetch("/sessions");
+
+    const agents =
+    await agentsResponse.json();
+
+    const sessions =
+    await sessionsResponse.json();
+
+    document.getElementById(
+        "totalAgents"
+    ).innerText =
+    agents.length;
+
+    document.getElementById(
+        "activeAgents"
+    ).innerText =
+    agents.filter(
+        a => a.isActive
+    ).length;
+
+    document.getElementById(
+        "connectedSessions"
+    ).innerText =
+    sessions.filter(
+        s => s.status === "Connected"
+    ).length;
+
+    document.getElementById(
+        "disconnectedSessions"
+    ).innerText =
+    sessions.filter(
+        s => s.status !== "Connected"
+    ).length;
+
+    const tbody =
+    document.querySelector(
+        "#agentTable tbody"
+    );
+
+    tbody.innerHTML = "";
+
+    agents.forEach(
+
+        agent=>{
+
+            const session =
+
+            sessions.find(
+
+                s =>
+                s.agentId ===
+                agent.agentId
+
+            );
+
+            const row =
+            document.createElement(
+                "tr"
+            );
+
+row.innerHTML = `
+
+    <td>${agent.agentName}</td>
+
+    <td>${agent.email || ""}</td>
+
+    <td>
+        ${agent.isActive ? "Yes" : "No"}
+    </td>
+
+    <td>
+
+        ${
+            session?.status === "Connected"
+
+            ?
+
+            `<button
+                onclick="stopSession('${agent.agentId}')"
+            >
+                Stop Session
+            </button>`
+
+            :
+
+            `<button
+                onclick="startSession('${agent.agentId}')"
+            >
+                Start Session
+            </button>`
+        }
+
+        <br><br>
+
+        <button
+            onclick="showQR('${agent.agentId}')"
+        >
+            Show QR
+        </button>
+
+        <br><br>
+
+        ${session?.status || "Unknown"}
+
+    </td>
+
+    <td>
+        ${agent.lastConnected || "-"}
+    </td>
+
+    <td>
+
+        ${
+            agent.isActive
+
+            ?
+
+            `<button
+                onclick="disableAgent('${agent.agentId}')"
+            >
+                Disable
+            </button>`
+
+            :
+
+            `<button
+                onclick="enableAgent('${agent.agentId}')"
+            >
+                Enable
+            </button>`
+        }
+
+        <br><br>
+
+        <button
+            onclick="deleteAgent('${agent.agentId}')"
+            style="
+                background:#c62828;
+                color:white;
+            "
+        >
+            Delete
+        </button>
+
+    </td>
+
+`;
+
+            tbody.appendChild(
+                row
+            );
+
+        }
+
+    );
+
+}
+
+async function deleteAgent(
+    agentId
+){
+
+    const confirmed =
+
+        confirm(
+
+            `Delete ${agentId}?`
+
+        );
+
+    if(
+        !confirmed
+    ){
+        return;
+    }
+
+    const response =
+
+        await fetch(
+
+            `/agent/${agentId}`,
+
+            {
+                method:"DELETE"
+            }
+
+        );
+
+    const result =
+
+        await response.json();
+
+    if(
+        result.success
+    ){
+
+        loadDashboard();
+
+    }
+    else{
+
+        alert(
+            result.error ||
+            "Delete failed"
+        );
+
+    }
+
+}
+
+async function addAgent(){
+
+    const agentId =
+    document.getElementById(
+        "agentId"
+    ).value;
+
+    const agentName =
+    document.getElementById(
+        "agentName"
+    ).value;
+
+    const email =
+    document.getElementById(
+        "email"
+    ).value;
+
+    if(
+        !agentId ||
+        !agentName
+    ){
+
+        alert(
+            "Agent ID and Agent Name required"
+        );
+
+        return;
+
+    }
+
+    const response =
+    await fetch(
+
+        "/agents",
+
+        {
+
+            method:"POST",
+
+            headers:{
+
+                "Content-Type":
+                "application/json"
+
+            },
+
+            body:JSON.stringify({
+
+                agentId,
+                agentName,
+                email
+
+            })
+
+        }
+
+    );
+
+    const result =
+    await response.json();
+
+    console.log(result);
+
+    document.getElementById(
+        "agentId"
+    ).value = "";
+
+    document.getElementById(
+        "agentName"
+    ).value = "";
+
+    document.getElementById(
+        "email"
+    ).value = "";
+
+    loadDashboard();
+
+}
+
+async function enableAgent(
+    agentId
+){
+
+    await fetch(
+
+        `/agent/${agentId}/enable`,
+
+        {
+            method:"POST"
+        }
+
+    );
+
+    loadDashboard();
+
+}
+
+async function disableAgent(
+    agentId
+){
+
+    await fetch(
+
+        `/agent/${agentId}/disable`,
+
+        {
+            method:"POST"
+        }
+
+    );
+
+    loadDashboard();
+
+}
+
+async function startSession(
+    agentId
+){
+
+    await fetch(
+
+        `/agent/${agentId}/start`,
+
+        {
+            method:"POST"
+        }
+
+    );
+
+    setTimeout(
+        loadDashboard,
+        2000
+    );
+
+}
+
+async function stopSession(
+    agentId
+){
+
+    await fetch(
+
+        `/agent/${agentId}/stop`,
+
+        {
+            method:"POST"
+        }
+
+    );
+
+    setTimeout(
+        loadDashboard,
+        2000
+    );
+
+}
+
+let qrRefreshTimer = null;
+
+async function showQR(
+    agentId
+){
+
+    document.getElementById(
+        "qrModal"
+    ).style.display =
+    "block";
+
+    document.getElementById(
+        "qrTitle"
+    ).innerText =
+    `Agent: ${agentId}`;
+
+    async function loadQR(){
+
+        const response =
+
+        await fetch(
+            `/qr/${agentId}`
+        );
+
+        const data =
+        await response.json();
+
+        if(
+            data.connected
+        ){
+
+            document.getElementById(
+                "qrContainer"
+            ).innerHTML =
+            `
+            <h3 style="color:green">
+                Connected ✓
+            </h3>
+            `;
+
+            clearInterval(
+                qrRefreshTimer
+            );
+
+            return;
+
+        }
+
+document.getElementById(
+    "qrContainer"
+).innerHTML =
+`
+<img
+src="${data.image}"
+style="
+width:300px;
+height:300px;
+"
+/>
+
+<br><br>
+
+<div>
+Waiting for scan...
+</div>
+`;
+
+    }
+
+    await loadQR();
+
+    qrRefreshTimer =
+    setInterval(
+        loadQR,
+        3000
+    );
+
+}
+
+function closeQR(){
+
+    clearInterval(
+        qrRefreshTimer
+    );
+
+    document.getElementById(
+        "qrModal"
+    ).style.display =
+    "none";
+
+}
+
+loadDashboard();
+
+setInterval(
+
+    loadDashboard,
+
+    5000
+
+);
+
+</script>
+<div
+id="qrModal"
+style="
+display:none;
+position:fixed;
+top:10%;
+left:30%;
+background:white;
+padding:20px;
+border:1px solid #ccc;
+border-radius:10px;
+box-shadow:0 0 10px rgba(0,0,0,0.2);
+z-index:9999;
+"
+>
+
+<h2 id="qrTitle">
+QR Code
+</h2>
+
+<div id="qrContainer"></div>
+
+<br>
+
+<button onclick="closeQR()">
+Close
+</button>
+
+</div>
+</body>
+
+</html>

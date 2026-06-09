@@ -101,6 +101,99 @@ db.serialize(()=>{
 
     );
 
+    /*
+    --------------------------------
+    Agents
+    --------------------------------
+    */
+
+    db.run(
+
+        `
+        CREATE TABLE IF NOT EXISTS agents(
+
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            agentId TEXT UNIQUE,
+
+            agentName TEXT NOT NULL,
+
+            email TEXT,
+
+            isActive INTEGER DEFAULT 1,
+
+            sessionStatus TEXT DEFAULT 'Disconnected',
+
+            lastConnected TEXT,
+
+            createdAt TEXT DEFAULT CURRENT_TIMESTAMP
+
+        )
+        `
+
+    );
+
+/*
+--------------------------------
+Agent Sessions
+--------------------------------
+*/
+
+db.run(
+
+    `
+    CREATE TABLE IF NOT EXISTS agent_sessions(
+
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+        agentId TEXT UNIQUE,
+
+        sessionId TEXT UNIQUE,
+
+        status TEXT DEFAULT 'Disconnected',
+
+        createdAt TEXT DEFAULT CURRENT_TIMESTAMP,
+
+        updatedAt TEXT DEFAULT CURRENT_TIMESTAMP
+
+    )
+    `
+
+);
+    
+
+    /*
+    --------------------------------
+    Schema Upgrades
+    --------------------------------
+    */
+
+    db.run(
+
+        `
+        ALTER TABLE agents
+        ADD COLUMN sessionStatus TEXT DEFAULT 'Disconnected'
+        `,
+
+        [],
+
+        ()=>{}
+
+    );
+
+    db.run(
+
+        `
+        ALTER TABLE agents
+        ADD COLUMN lastConnected TEXT
+        `,
+
+        [],
+
+        ()=>{}
+
+    );
+
 });
 
 module.exports =

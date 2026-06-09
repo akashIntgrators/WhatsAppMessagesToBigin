@@ -8,12 +8,42 @@ const {
     LocalAuth
 } = require("whatsapp-web.js");
 
+
+const {
+
+    saveQR,
+
+    removeQR
+
+} = require(
+    "./qrStore"
+);
+
 const axios = require("axios");
 
-const agents =
-require("./config/agents");
+const {
+    loadAgents
+} = require(
+    "./startupAgents"
+);
 
-const clients = [];
+const {
+
+    updateAgentStatus
+
+} = require(
+
+    "./agentService"
+
+);
+
+const {
+    updateSessionStatus
+} = require(
+    "./sessionService"
+);
+
+const clients = {};
 
 async function saveMedia(
     phone,
@@ -80,8 +110,62 @@ async function saveMedia(
 
 }
 
-function createClient(agent){
 
+function cleanupLocks(agentId){
+
+    const sessionPath = path.join(
+        __dirname,
+        ".wwebjs_auth",
+        `session-${agentId}`
+    );
+
+    if(!fs.existsSync(sessionPath)){
+        return;
+    }
+
+    fs.readdirSync(sessionPath)
+      .filter(file =>
+          file.startsWith("Singleton")
+      )
+      .forEach(file => {
+
+          try{
+
+              fs.unlinkSync(
+                  path.join(
+                      sessionPath,
+                      file
+                  )
+              );
+
+              console.log(
+                  `Removed ${file} for ${agentId}`
+              );
+
+          }
+          catch(err){
+
+              console.log(
+                  err.message
+              );
+
+          }
+
+      });
+
+}
+
+function createClient(agent){
+cleanupLocks(agent.id);
+
+
+console.log(
+
+    "CREATE CLIENT CALLED:",
+
+    agent.id
+
+);
     const client = new Client({
 
         authStrategy:
@@ -377,43 +461,89 @@ else if(
 
     }
 
-    client.on(
+client.on(
 
-        "qr",
+    "qr",
 
-        (qr)=>{
+    (qr)=>{
 
-            console.log(
-                `\n${agent.name.toUpperCase()} QR:\n`
-            );
+        saveQR(
+            agent.id,
+            qr
+        );
 
-            qrcode.generate(
+        console.log(
+            `\n${agent.name.toUpperCase()} QR:\n`
+        );
 
-                qr,
+        qrcode.generate(
 
-                {
-                    small:true
-                }
+            qr,
 
-            );
+            {
+                small:true
+            }
 
-        }
+        );
 
-    );
+    }
 
-    client.on(
+);
 
-        "ready",
+client.on(
 
-        ()=>{
+    "ready",
 
-            console.log(
-                `${agent.name} ready`
-            );
+    async()=>{
 
-        }
 
-    );
+
+        await updateAgentStatus(
+
+            agent.id,
+
+            "Connected"
+
+        );
+        await updateSessionStatus(
+    agent.id,
+    "Connected"
+);
+        removeQR(agent.id);
+
+        console.log(
+            `${agent.name} ready`
+        );
+
+    }
+
+);
+
+client.on(
+
+    "disconnected",
+
+    async()=>{
+
+        await updateAgentStatus(
+
+            agent.id,
+
+            "Disconnected"
+
+        );
+        await updateSessionStatus(
+    agent.id,
+    "Disconnected"
+);
+
+        console.log(
+            `${agent.name} disconnected`
+        );
+
+    }
+
+);
 
     /*
     Incoming messages
@@ -451,27 +581,134 @@ else if(
 
     );
 
-    client.initialize();
+client.initialize();
 
-    clients.push(
-        client
-    );
+clients[agent.id] =client;
+
+return client;
 
 }
 
-for(
-    const agent of agents
-){
+async function initializeClients(){
+
+    const agents =
+    await loadAgents();
 
     console.log(
-        `Starting agent: ${agent.name}`
+        `Loading ${agents.length} agents`
     );
 
-    createClient(
-        agent
+    for(
+        const agent of agents
+    ){
+
+        console.log(
+            `Starting agent: ${agent.name}`
+        );
+
+        createClient(
+            agent
+        );
+
+    }
+
+}
+
+setTimeout(()=>{
+
+    console.log(
+        "CLIENTS:",
+        Object.keys(clients)
+    );
+
+},10000);
+
+async function stopClient(
+    agentId
+){
+
+    try{
+
+        const client =
+        clients[agentId];
+
+        if(!client){
+
+            console.log(
+                `Client not found: ${agentId}`
+            );
+
+            return false;
+
+        }
+
+        await client.destroy();
+
+        delete clients[agentId];
+
+        console.log(
+            `Client stopped: ${agentId}`
+        );
+
+        return true;
+
+    }
+    catch(err){
+
+        console.log(
+            err
+        );
+
+        return false;
+
+    }
+
+}
+
+function deleteAgent(
+    agentId
+){
+
+    return new Promise(
+
+        (resolve,reject)=>{
+
+            db.run(
+
+                `
+                DELETE
+                FROM agents
+                WHERE agentId = ?
+                `,
+
+                [agentId],
+
+                function(err){
+
+                    if(err){
+
+                        return reject(err);
+
+                    }
+
+                    resolve();
+
+                }
+
+            );
+
+        }
+
     );
 
 }
 
-module.exports =
-clients;
+module.exports = {
+
+    clients,
+    stopClient,
+    createClient,
+    deleteAgent,
+    initializeClients
+
+};

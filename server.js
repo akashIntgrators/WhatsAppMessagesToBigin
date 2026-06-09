@@ -3,19 +3,36 @@ console.log("SERVER FILE:", __filename);
 console.log("START TIME:", new Date());
 require("dotenv").config();
 
-const leadRoutes =
-require("./routes/leads");
+const path =
+require("path");
 
-app.use(
-    "/leads",
-    leadRoutes
+const {
+    initializeClients
+} = require(
+    "./whatsappClient"
 );
 
+const sessionRoutes =
+require("./routes/sessions");
+
+console.log(
+
+    "LOADING:",
+
+    require.resolve(
+
+        "./routes/agentActions"
+
+    )
+
+);
+const agentActions =
 require(
-
-"./whatsappClient"
-
+    "./routes/agentActions"
 );
+
+const qrRoutes =
+require("./routes/qr");
 
 const express = require("express");
 const cors = require("cors");
@@ -31,6 +48,30 @@ Middleware
 app.use(cors());
 
 app.use(express.json());
+
+app.use(
+    "/agent",
+    agentActions
+);
+
+app.use(
+    "/qr",
+    qrRoutes
+);
+
+app.use(
+
+    express.static(
+
+        path.join(
+            __dirname,
+            "public"
+        )
+
+    )
+
+);
+
 app.use((req, res, next) => {
 
     console.log(
@@ -51,6 +92,28 @@ app.use((req, res, next) => {
 /*
 Routes
 */
+
+const leadRoutes =
+require("./routes/leads");
+
+app.use(
+    "/leads",
+    leadRoutes
+);
+
+
+const agentRoutes =
+require("./routes/agents");
+
+app.use(
+    "/agents",
+    agentRoutes
+);
+
+app.use(
+    "/sessions",
+    sessionRoutes
+);
 
 
 const messageRoutes =
@@ -84,20 +147,50 @@ app.get("/",(req,res)=>{
 
 });
 
+app.get(
+
+    "/admin",
+
+    (req,res)=>{
+
+        res.sendFile(
+
+            path.join(
+
+                __dirname,
+
+                "public",
+
+                "admin.html"
+
+            )
+
+        );
+
+    }
+
+);
+
 
 /*
 Start server
 */
 
 app.listen(
-PORT,
-()=>{
 
-    console.log(
-        `Server running on port ${PORT}`
-    );
+    PORT,
 
-});
+    async()=>{
+
+        console.log(
+            `Server running on port ${PORT}`
+        );
+
+        await initializeClients();
+
+    }
+
+);
 
 
 /*
